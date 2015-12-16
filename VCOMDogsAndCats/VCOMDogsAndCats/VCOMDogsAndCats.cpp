@@ -7,7 +7,7 @@
 //5th try (SIFT+300+20 clusters+SVM.kernel RBF) 0.45589
 //6th try (SIFT+300+10 clusters+SVM.kernel RBF) 0.50400
 //7th try (SIFT+1000+10 clusters+SVM.kernel linear) 0.52114
-//8th try (SIFT+300+5 clusters+SVM.kernel linear) ?
+//8th try (SIFT+300+5 clusters+SVM.kernel linear) 	0.53749
 #include "stdafx.h"
 
 #include <opencv2/features2d/features2d.hpp>
@@ -27,8 +27,8 @@ using namespace ml;
 Ptr<FeatureDetector> detector = xfeatures2d::SIFT::create();
 Ptr<DescriptorExtractor> extractor = xfeatures2d::SIFT::create();
 Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
-int numberClusters = 10;
-int numberOfImages = 1000;//300 cats 300 dogs
+int numberClusters = 5;
+int numberOfImages = 300;//300 cats 300 dogs
 BOWKMeansTrainer bowTrainer(numberClusters);
 BOWImgDescriptorExtractor bowDE(extractor, matcher);
 
@@ -43,7 +43,22 @@ bool openImage(const std::string &filename, Mat &image)
 	return true;
 }
 
-void train(vector<string> &listOfImages)
+//gets the name of the images
+vector<String> getImagesNames()
+{
+	vector<String> listOfImages = vector<String>();
+	for (int i = 0;i < numberOfImages;i++)
+	{
+		listOfImages.push_back(("train/cat." + to_string(i) + ".jpg"));
+	}
+	for (int i = 0;i < numberOfImages;i++)
+	{
+		listOfImages.push_back(("train/dog." + to_string(i) + ".jpg"));
+	}
+	return listOfImages;
+}
+
+void trainBagOfFeatures(vector<String> listOfImages)
 {
 	Mat image;
 	vector<KeyPoint> keypoints;
@@ -70,6 +85,11 @@ void train(vector<string> &listOfImages)
 
 	Mat dictionary = bowTrainer.cluster();
 	bowDE.setVocabulary(dictionary);
+}
+
+void trainSVM(vector<String> listOfImages)
+{
+	Mat image;
 
 	// Set up SVM's parameters
 	Ptr< SVM > svm = SVM::create();
@@ -80,8 +100,8 @@ void train(vector<string> &listOfImages)
 	// Train the SVM
 	Mat labels(0, 1, CV_32FC1);
 	Mat trainingData(0, numberClusters, CV_32FC1);
-	vector<KeyPoint> keypoint1;
-	Mat bowDescriptor1;
+	vector<KeyPoint> keypoint;
+	Mat bowDescriptor;
 
 	//cats
 	for (int i = 0;i < numberOfImages;i++) {
@@ -92,9 +112,9 @@ void train(vector<string> &listOfImages)
 
 		cout << i << endl;
 
-		detector->detect(image, keypoint1);
-		bowDE.compute(image, keypoint1, bowDescriptor1);
-		trainingData.push_back(bowDescriptor1);
+		detector->detect(image, keypoint);
+		bowDE.compute(image, keypoint, bowDescriptor);
+		trainingData.push_back(bowDescriptor);
 
 		labels.push_back(0);
 	}
@@ -108,8 +128,8 @@ void train(vector<string> &listOfImages)
 
 		cout << i << endl;
 
-		detector->detect(image, keypoint1);
-		bowDE.compute(image, keypoint1, bowDescriptor1);
+		detector->detect(image, keypoint);
+		bowDE.compute(image, keypoint1, bowDescriptor);
 		trainingData.push_back(bowDescriptor1);
 
 		labels.push_back(1);
@@ -118,9 +138,22 @@ void train(vector<string> &listOfImages)
 	printf("%s\n", "Training SVM classifier");
 
 	bool res = svm->train(trainingData, ml::ROW_SAMPLE, labels);
-
 	cout << res;
 	svm->save("test.xml");
+}
+
+void train()
+{
+	Mat image;
+	vector<KeyPoint> keypoints;
+	Mat descriptors, allDescriptors;
+
+	vector<String> listOfImages = vector<String>();
+	listOfImages = getImagesNames();
+
+	trainBagOfFeatures(listOfImages);
+
+	trainSVM(listOfImages);
 
 }
 
@@ -166,16 +199,7 @@ int main()
 	bool training = false;
 	if (training)
 	{
-		vector<string> imgsName = vector<string>();
-		for (int i = 0;i < numberOfImages;i++)
-		{
-			imgsName.push_back(("train/cat." + to_string(i) + ".jpg"));
-		}
-		for (int i = 0;i < numberOfImages;i++)
-		{
-			imgsName.push_back(("train/dog." + to_string(i) + ".jpg"));
-		}
-		train(imgsName);
+		train();
 	}
 	else
 	{
