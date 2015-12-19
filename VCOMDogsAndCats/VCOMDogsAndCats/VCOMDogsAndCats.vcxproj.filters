@@ -29,7 +29,10 @@
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="VCOMDogsAndCats.cpp">
+    <ClCompile Include="SIFTHistBagOfFeatSVM.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SIFTBagOfFeatSVM.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
