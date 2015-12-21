@@ -232,7 +232,7 @@ int main()
 	//1->train only machine learning
 	//2->test
 	int mode = 0;
-	if (mode == 2)
+	if (mode == 0)
 	{
 		train(true);
 	}

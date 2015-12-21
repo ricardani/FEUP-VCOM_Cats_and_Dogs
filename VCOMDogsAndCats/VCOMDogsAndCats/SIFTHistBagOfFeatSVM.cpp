@@ -106,13 +106,14 @@ void trainML(vector<String> listOfImages)
 		if (!openImage(listOfImages[i], image))
 			continue;
 
-		cout << i << endl;
+		cout << "test" << endl;
 
 		detector->detect(image, keypoint);
 		bowDE.compute(image, keypoint, bowDescriptor);
 		trainingData.push_back(bowDescriptor);
 
 		labels.push_back(0);
+		cout << labels[i] << endl;
 	}
 
 	//dogs
@@ -231,8 +232,8 @@ int main()
 	//0->complete training
 	//1->train only machine learning
 	//2->test
-	int mode = 0;
-	if (mode==2)
+	int mode = 1;
+	if (mode==0)
 	{
 		train(true);
 	}
