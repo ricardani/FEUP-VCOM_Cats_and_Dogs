@@ -1,9 +1,5 @@
 // VCOMDogsAndCats.cpp : Defines the entry point for the console application.
 // This file test machine learning using SIFT for local features detection and extraction,bag of features for vocabulary and SVM, Neural Networks and Bayes for machine learning
-//                                                              svm     boost   knn
-//1st try (SIFT+1000+200 clusters+SVM autotrain(100)  0.71509 (0.71440+0.68526+0.64229)
-//2nd try (SIFT+1500+300 clusters+SVM autotrain(100)  0.53326 (0.49794+0.52549+0.53440)
-//3rd try (SIFT+1000+300 clusters+SVM autotrain(100)  0.55246 (0.55223+0.56057+0.52811)
 #include "stdafx.h"
 
 #include <opencv2/features2d/features2d.hpp>
@@ -20,13 +16,13 @@ using namespace cv;
 using namespace std;
 using namespace ml;
 
-Ptr<FeatureDetector> detector = xfeatures2d::SIFT::create();
-Ptr<DescriptorExtractor> extractor = xfeatures2d::SIFT::create();
+Ptr<FeatureDetector> detector = xfeatures2d::SIFT::create();//creates a SIFT detector
+Ptr<DescriptorExtractor> extractor = xfeatures2d::SIFT::create();//creates a SIFT extractor
 Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
-int numberClusters = 300;
-int numberOfImages = 1000;//300 cats 300 dogs
-BOWKMeansTrainer bowTrainer(numberClusters);
-BOWImgDescriptorExtractor bowDE(extractor, matcher);
+int numberClusters = 400;
+int numberOfImages = 1500;//1500 cats 1500 dogs
+BOWKMeansTrainer bowTrainer(numberClusters);//trains the bag of features with k-means algorithm
+BOWImgDescriptorExtractor bowDE(extractor, matcher);//bag of features extractor
 Ptr< SVM > svm = SVM::create();
 Ptr< Boost> boost = Boost::create();
 Ptr<KNearest> kn = KNearest::create();
@@ -43,7 +39,7 @@ bool openImage(const std::string &filename, Mat &image)
 	return true;
 }
 
-//gets the name of the images
+//returns a vector with the name of the train images
 vector<String> getImagesNames()
 {
 	vector<String> listOfImages = vector<String>();
@@ -58,6 +54,7 @@ vector<String> getImagesNames()
 	return listOfImages;
 }
 
+//trains bag of features with the images given to it
 void trainBagOfFeatures(vector<String> listOfImages)
 {
 	Mat image;
@@ -85,17 +82,13 @@ void trainBagOfFeatures(vector<String> listOfImages)
 	fs1.release();
 
 	//Define Dictionary
-	Mat dictionary = bowTrainer.cluster();
-	bowDE.setVocabulary(dictionary);
+	bowDE.setVocabulary(vocabulary);
 }
 
 void trainML(vector<String> listOfImages)
 {
 	Mat image;
 
-	// Set up SVM's parameters
-
-	// Train the SVM
 	Mat labels(0, 1, CV_32FC1);
 	Mat trainingData(0, numberClusters, CV_32FC1);
 	vector<KeyPoint> keypoint;
@@ -142,11 +135,13 @@ void trainML(vector<String> listOfImages)
 	boost->train(td);
 	kn->train(td);
 
+	//saves the trained machines
 	svm->save("svm.xml");
 	boost->save("boost.xml");
 	kn->save("kn.xml");
 }
 
+//train 
 void train(bool trainVoc)
 {
 	vector<String> listOfImages = vector<String>();
@@ -159,12 +154,19 @@ void train(bool trainVoc)
 	}
 	else
 	{
-		FileStorage fs("voc.yml", FileStorage::READ);
-		if (fs.isOpened())
+		try
 		{
-			fs["vocabulary"] >> dictionary;
+			FileStorage fs("voc.yml", FileStorage::READ);
+			if (fs.isOpened())
+			{
+				fs["vocabulary"] >> dictionary;
+			}
+			bowDE.setVocabulary(dictionary);
 		}
-		bowDE.setVocabulary(dictionary);
+		catch(exception& e)
+		{
+			cerr << e.what() << '\n';
+		}
 	}
 
 
@@ -172,64 +174,72 @@ void train(bool trainVoc)
 
 }
 
+//tests all the images in the folder test1 and writes the results of which machine and the result of the 3 combined.
 void predictTestSet()
 {
 	Mat image, descriptors, dictionary, allDescriptors = Mat();
 	vector<KeyPoint> keypoints;
 
-	//load trained machine
-	svm = SVM::load<SVM>("svm.xml");
-	boost = SVM::load<Boost>("boost.xml");
-	kn = SVM::load<KNearest>("kn.xml");
-
-	FileStorage fs("voc.yml", FileStorage::READ);
-	if (fs.isOpened())
+	try
 	{
-		fs["vocabulary"] >> dictionary;
+		//load trained machine
+		svm = SVM::load<SVM>("svm.xml");
+		boost = SVM::load<Boost>("boost.xml");
+		kn = SVM::load<KNearest>("kn.xml");
+
+		//load vocabulary for bag of features
+		FileStorage fs("voc.yml", FileStorage::READ);
+		if (fs.isOpened())
+		{
+			fs["vocabulary"] >> dictionary;
+		}
+		bowDE.setVocabulary(dictionary);
+		//end of load
+
+		//open csv files
+		ofstream rspCSV("rsp.csv");
+		ofstream svmCSV("SVMrsp.csv");
+		ofstream boostCSV("Boostrsp.csv");
+		ofstream knnCSV("KNNrsp.csv");
+
+		//first line of which file
+		rspCSV << "id,label" << endl;
+		svmCSV << "id,label" << endl;
+		boostCSV << "id,label" << endl;
+		knnCSV << "id,label" << endl;
+
+		for (int i = 1; i <= 12500; i++)
+		{
+			if (!openImage("test1/" + to_string(i) + ".jpg", image))
+				continue;
+
+			cout << i << endl;
+			detector->detect(image, keypoints);
+			bowDE.compute(image, keypoints, descriptors);
+
+			//Predict of which machine
+			float svmP = svm->predict(descriptors);
+			float boostP = boost->predict(descriptors);
+			float knP = kn->predict(descriptors);
+			int r = round((svmP + boostP + knP) / 3.0);
+
+			rspCSV << i << "," << r << endl;
+			svmCSV << i << "," << svmP << endl;
+			boostCSV << i << "," << boostP << endl;
+			knnCSV << i << "," << knP << endl;
+		}
+		rspCSV.close();
+		svmCSV.close();
+		boostCSV.close();
+		knnCSV.close();
 	}
-	bowDE.setVocabulary(dictionary);
-	//end of load
-
-	//open csv files
-	ofstream rspCSV("rsp.csv");
-	ofstream svmCSV("SVMrsp.csv");
-	ofstream boostCSV("Boostrsp.csv");
-	ofstream knnCSV("KNNrsp.csv");
-	
-	rspCSV << "id,label" << endl;
-	svmCSV << "id,label" << endl;
-	boostCSV << "id,label" << endl;
-	knnCSV << "id,label" << endl;
-
-	for (int i = 1; i <= 12500; i++)
+	catch (exception& e)
 	{
-		if (!openImage("test1/" + to_string(i) + ".jpg", image))
-			continue;
-
-		cout << i << endl;
-		detector->detect(image, keypoints);
-		bowDE.compute(image, keypoints, descriptors);
-
-		//Predict
-		float svmP = svm->predict(descriptors);
-		float boostP = boost->predict(descriptors);
-		float knP = kn->predict(descriptors);
-		int r = round((svmP + boostP + knP) / 3.0);
-
-		//rspCSV << i << "," << svmP <<","<<bayesP <<","<< knP <<"->"<< r<< std::endl;
-		rspCSV << i << "," << r << endl;
-		svmCSV << i << "," << svmP << endl;
-		boostCSV << i << "," << boostP << endl;
-		knnCSV << i << "," << knP << endl;
+		cerr << e.what() << '\n';
 	}
-	rspCSV.close();
-	svmCSV.close();
-	boostCSV.close();
-	knnCSV.close();
-	waitKey(0);
-
 }
 
+//tests one image to see if it is a dog or a cat
 void predictImage()
 {
 	Mat image, descriptors, dictionary, allDescriptors = Mat();
@@ -238,6 +248,7 @@ void predictImage()
 	string image_name;
 	cout << "Image: " << endl;
 	cin >> image_name;
+
 
 	//load trained machine
 	svm = SVM::load<SVM>("svm.xml");
