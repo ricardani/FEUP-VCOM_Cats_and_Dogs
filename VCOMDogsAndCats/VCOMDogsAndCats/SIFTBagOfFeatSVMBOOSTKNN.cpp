@@ -47,11 +47,11 @@ bool openImage(const std::string &filename, Mat &image)
 vector<String> getImagesNames()
 {
 	vector<String> listOfImages = vector<String>();
-	for (int i = 0;i < numberOfImages;i++)
+	for (int i = 0; i < numberOfImages; i++)
 	{
 		listOfImages.push_back(("train/cat." + to_string(i) + ".jpg"));
 	}
-	for (int i = 0;i < numberOfImages;i++)
+	for (int i = 0; i < numberOfImages; i++)
 	{
 		listOfImages.push_back(("train/dog." + to_string(i) + ".jpg"));
 	}
@@ -64,6 +64,7 @@ void trainBagOfFeatures(vector<String> listOfImages)
 	vector<KeyPoint> keypoints;
 	Mat descriptors, allDescriptors;
 
+	//Extract descriptors from all images
 	for (int i = 0; i < listOfImages.size(); i++)
 	{
 		if (!openImage(listOfImages[i], image))
@@ -75,7 +76,7 @@ void trainBagOfFeatures(vector<String> listOfImages)
 		allDescriptors.push_back(descriptors);
 	}
 
-	//num clusters
+	//Create vocabulary
 	bowTrainer.add(allDescriptors);
 	Mat vocabulary = bowTrainer.cluster();
 
@@ -83,6 +84,7 @@ void trainBagOfFeatures(vector<String> listOfImages)
 	fs1 << "vocabulary" << vocabulary;
 	fs1.release();
 
+	//Define Dictionary
 	Mat dictionary = bowTrainer.cluster();
 	bowDE.setVocabulary(dictionary);
 }
@@ -99,8 +101,8 @@ void trainML(vector<String> listOfImages)
 	vector<KeyPoint> keypoint;
 	Mat bowDescriptor;
 
-	//cats
-	for (int i = 0;i < numberOfImages;i++) {
+	//Extract descriptors of cats
+	for (int i = 0; i < numberOfImages; i++) {
 
 
 		if (!openImage(listOfImages[i], image))
@@ -115,8 +117,8 @@ void trainML(vector<String> listOfImages)
 		labels.push_back(0);
 	}
 
-	//dogs
-	for (int i = numberOfImages;i < numberOfImages * 2;i++) {
+	//Extract descriptors of dogs
+	for (int i = numberOfImages; i < numberOfImages * 2; i++) {
 
 
 		if (!openImage(listOfImages[i], image))
@@ -134,8 +136,8 @@ void trainML(vector<String> listOfImages)
 	printf("%s\n", "Training SVM classifier");
 
 	Ptr<TrainData> td = TrainData::create(trainingData, ROW_SAMPLE, labels);
-	//bool res = svm->train(trainingData, ROW_SAMPLE, labels);
-	//cout << res;
+
+	//Train SVM, K-NN and Boosting
 	svm->trainAuto(td, 100);
 	boost->train(td);
 	kn->train(td);
@@ -150,6 +152,7 @@ void train(bool trainVoc)
 	vector<String> listOfImages = vector<String>();
 	listOfImages = getImagesNames();
 	Mat dictionary;
+	//Create vocabulary if necessary
 	if (trainVoc)
 	{
 		trainBagOfFeatures(listOfImages);
@@ -169,7 +172,7 @@ void train(bool trainVoc)
 
 }
 
-void testImages()
+void predictTestSet()
 {
 	Mat image, descriptors, dictionary, allDescriptors = Mat();
 	vector<KeyPoint> keypoints;
@@ -187,11 +190,12 @@ void testImages()
 	bowDE.setVocabulary(dictionary);
 	//end of load
 
+	//open csv files
 	ofstream rspCSV("rsp.csv");
 	ofstream svmCSV("SVMrsp.csv");
 	ofstream boostCSV("Boostrsp.csv");
 	ofstream knnCSV("KNNrsp.csv");
-	// this does the open for you, appending data to an existing file
+	
 	rspCSV << "id,label" << endl;
 	svmCSV << "id,label" << endl;
 	boostCSV << "id,label" << endl;
@@ -206,6 +210,7 @@ void testImages()
 		detector->detect(image, keypoints);
 		bowDE.compute(image, keypoints, descriptors);
 
+		//Predict
 		float svmP = svm->predict(descriptors);
 		float boostP = boost->predict(descriptors);
 		float knP = kn->predict(descriptors);
@@ -225,25 +230,100 @@ void testImages()
 
 }
 
+void predictImage()
+{
+	Mat image, descriptors, dictionary, allDescriptors = Mat();
+	vector<KeyPoint> keypoints;
+
+	string image_name;
+	cout << "Image: " << endl;
+	cin >> image_name;
+
+	//load trained machine
+	svm = SVM::load<SVM>("svm.xml");
+	boost = SVM::load<Boost>("boost.xml");
+	kn = SVM::load<KNearest>("kn.xml");
+
+	FileStorage fs("voc.yml", FileStorage::READ);
+	if (fs.isOpened())
+	{
+		fs["vocabulary"] >> dictionary;
+	}
+	else 
+	{
+		cout << "Failed to open voc.yml!" << endl;
+		return;
+	}
+
+	bowDE.setVocabulary(dictionary);
+	//end of load
+
+	if (!openImage(image_name, image)) {
+		cout << "Failed to open image: " << image_name << endl;
+		return;
+	}
+
+	detector->detect(image, keypoints);
+	bowDE.compute(image, keypoints, descriptors);
+
+	float svmP = svm->predict(descriptors);
+	float boostP = boost->predict(descriptors);
+	float knP = kn->predict(descriptors);
+	int r = round((svmP + boostP + knP) / 3.0);
+
+	if (r == 0)
+		cout << "This is a Cat!" << endl;
+	else 
+		cout << "This is a Dog!" << endl;
+
+}
+
+void menu() {
+	string option;
+	int MENU_OPTION;
+
+	cout << "  ____   ___   ____ ____                 ____    _  _____ ____  " << endl;
+	cout << " |  _ \\ / _ \\ / ___/ ___|  __   _____   / ___|  / \\|_   _/ ___| " << endl;
+	cout << " | | | | | | | |  _\\___ \\  \\ \\ / / __| | |     / _ \\ | | \\___ \\ " << endl;
+	cout << " | |_| | |_| | |_| |___) |  \\ V /\\__ \\ | |___ / ___ \\| |  ___) |" << endl;
+	cout << " |____/ \\___/ \\____|____/    \\_/ |___/  \\____/_/   \\_\\_| |____/ " << endl;
+	cout << endl << endl;
+
+	cout << "Choose an option:" << endl;
+	cout << "1 - Complete Training" << endl;
+	cout << "2 - Train With voc.yml" << endl;
+	cout << "3 - Predict Test Set" << endl;
+	cout << "4 - Predict Image" << endl;
+	cout << "0 - Exit" << endl;
+	cin >> option;
+
+	MENU_OPTION = atoi(option.c_str());
+
+	switch (MENU_OPTION)
+	{
+	case 1:
+		train(true);
+		break;
+	case 2:
+		train(false);
+		break;
+	case 3:
+		predictTestSet();
+		break;
+	case 4:
+		predictImage();
+		break;
+	default:
+		return;
+		break;
+	}
+
+}
+
 
 int main()
 {
-	//0->complete training
-	//1->train only machine learning
-	//2->test
-	int mode = 0;
-	if (mode == 0)
-	{
-		train(true);
-	}
-	else if (mode == 1)
-	{
-		train(false);
-	}
-	else
-	{
-		testImages();
-	}
+	menu();
 	return 0;
 }
 
