@@ -4,7 +4,7 @@
 //1st try (SIFT+1000+200 clusters+SVM autotrain(100)  0.71509 (0.71440+0.68526+0.64229)
 //2nd try (SIFT+1500+300 clusters+SVM autotrain(100)  0.53326 (0.49794+0.52549+0.53440)
 //3rd try (SIFT+1000+300 clusters+SVM autotrain(100)  0.55246 (0.55223+0.56057+0.52811)
-#include "stdafx.h"
+//#include "stdafx.h"
 
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -270,6 +270,23 @@ void predictImage()
 	float boostP = boost->predict(descriptors);
 	float knP = kn->predict(descriptors);
 	int r = round((svmP + boostP + knP) / 3.0);
+
+	cout << endl;
+
+	if (svmP == 0)
+		cout << "SVM Predicted it's a Cat!" << endl;
+	else 
+		cout << "SVM Predicted it's a Dog!" << endl;
+
+	if (boostP == 0)
+		cout << "BOOST Predicted it's a Cat!" << endl;
+	else
+		cout << "BOOST Predicted it's a Dog!" << endl;
+
+	if (knP == 0)
+		cout << "K-Nearest Predict it's a Cat!" << endl;
+	else
+		cout << "K-Nearest Predict it's a Dog!" << endl;
 
 	if (r == 0)
 		cout << "This is a Cat!" << endl;
